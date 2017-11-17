@@ -15,6 +15,13 @@ void ofApp::setup()
 
 void ofApp::update()
 {
+    // Play the audio from the queue till the pendingQueue is
+    // empty.
+    if (!mySound.isPlaying() && pendingQueue > 0) {
+        mySound.play();
+        pendingQueue = pendingQueue - 1;
+    }
+    
     // As long as there is serial data available to read, repeat.
     while (serial.available() > 0)
     {
@@ -35,7 +42,11 @@ void ofApp::update()
                 curSensorVal1 = ofToBool(tokens[1]); // Since we reversed the sensors.
                 curSensorVal2 = ofToBool(tokens[2]);
                 
-                // Process sensor data.
+                // Process button click.
+                processButton();
+                
+                // Process sensors.
+                processSensors();
             }
             buffer = "";
         }
@@ -53,7 +64,7 @@ void ofApp::draw()
     ofFill();
 }
 
-void ofApp::processSensorData() {
+void ofApp::processButton() {
     // Is button pressed?
     if (buttonValue_0 != true)
     {
@@ -68,48 +79,66 @@ void ofApp::processSensorData() {
             mySound.setLoop(false);
         }
     }
-    
+}
+
+void ofApp::processSensors() {
     // Do something with sensor 1 value.
-    if (curSensorVal1 == true && tracking == false) {
-        // Start tracking.
-        
-        prevSensorVal1 = curSensorVal1;
-        tracking = true;
-        ofResetElapsedTimeCounter();
-        
-        cout << "Start tracking" << endl;
+    if (curSensorVal1 == true) {
+        if (tracking == false) {
+            // Start tracking.
+            prevSensorVal1 = curSensorVal1;
+            tracking = true;
+            
+            // Reset timer.
+            ofResetElapsedTimeCounter();
+            
+            cout << "Start tracking" << endl;
+        }
     }
     
     // Do something with sensor 2 value.
-    if (curSensorVal2 == true && prevSensorVal1 == true) {
-        elapsedTime = ofGetElapsedTimeMillis();
-        if (elapsedTime < minTime) {
-            // Unexpected. Somebody is trying to exit. 
-        } else if (elapsedTime < maxTime) {
-            // Play the sound since somebody has entered.
-            if (!mySound.isPlaying()) {
-                mySound.play();
+    if (curSensorVal2 == true) {
+        if (prevSensorVal1 == true) {
+            // Calculate the elapsed time.
+            elapsedTime = ofGetElapsedTimeMillis();
+            
+            if (elapsedTime < minTime) {
+                // Somebody is trying to exit as soon as somebody began entering.
+                // Ignore. Ignore.
+                // We won't do anything here.
+                // This also handles any errors in both the sensors receiving same values.
+            } else if (elapsedTime < medianTime) {
+                // Average case. If this time has passed, I can be confident that
+                // a person has probably entered. If they haven't entered and current sensor value
+                // 2 still triggered, let's presume they should have entered by now.
+                
+                cout << "Somebody entered" << endl;
+                cout << "Elapsed Time is " << elapsedTime << endl;
+                
+                // Reset tracking of the sensor.
+                resetTracking();
+                
+                // Increment the queue for number of times audio should be played.
+                pendingQueue = pendingQueue + 1;
+            } else if (elapsedTime < maxTimeout){
+                // Unexpected. Person has taken too long to come inside the room.
+                // We will reset tracking.
+                // Don't increment the pending queue.
+                resetTracking();
             }
-            
-            // Print this.
-            prevSensorVal1 = false;
-            // Stop tracking.
-            tracking = false;
-            
-            
-            cout << "Somebody entered" << endl;
-            cout << "Elapsed Time is " << elapsedTime << endl;
-        } else {
-         
-            
         }
     }
+}
+
+void ofApp::resetTracking() {
+    prevSensorVal1 = false;
+    tracking = false;
 }
 
 void ofApp::keyPressed(int key) {
     // Restart tracking.
     if (key == 49) {
-        tracking = false;
+        resetTracking();
     }
 }
 
